@@ -33,29 +33,63 @@ class MainActivity : ComponentActivity() {
 }
 
 object HideDigitsVisualTransformation : VisualTransformation {
-    private val regex = Regex("[0-9]")
     override fun filter(text: AnnotatedString): TransformedText {
-        val trimmed = text.text.replace(regex,"*")
-        return TransformedText(AnnotatedString(trimmed), offsetMapping = OffsetMapping.Identity)
+        val trimmed = if (text.text.length >= 16) text.text.substring(0..15) else text.text
+        var out = ""
+        for (i in trimmed.indices) {
+            out += trimmed[i]
+            if (i % 4 == 3 && i != 15) out += "-"
+        }
+
+        // Custom OffsetMapping to handle hyphens
+        val offsetMapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                // Every 4 digits before 'offset' will add a hyphen (except after 16th digit)
+                val groups = if (offset == 0) 0 else (offset - 1) / 4
+                return offset + groups
+            }
+
+            override fun transformedToOriginal(offset: Int): Int {
+                // For a given transformed index, count digits before that position to get the original index.
+                var digitCount = 0
+                var strIndex = 0
+                while (strIndex < out.length && strIndex < offset) {
+                    if (out[strIndex] != '-') digitCount++
+                    strIndex++
+                }
+                return digitCount
+            }
+        }
+        return TransformedText(AnnotatedString(out), offsetMapping)
     }
 }
 
 @Composable
 @Preview
 fun SampleVisualTransformation(){
-    val (number,setNumber) = remember { mutableStateOf("1234-5678-9012-3456") }
+    val (number,setNumber) = remember { mutableStateOf("1234567890123456") }
     Column {
+        // TextField without visual transformation, showing original input
+        // Limited to 16 digits max
         TextField(
             value = number,
-            onValueChange = setNumber,
-            modifier = Modifier.padding(8.dp).fillMaxWidth()
+            onValueChange = { 
+                if (it.length <= 16) {
+                    setNumber(it)
+                }
+            },
+            modifier = Modifier
+                .padding(8.dp)
+                .fillMaxWidth()
         )
 
         TextField(
             value = number,
             onValueChange = setNumber,
             visualTransformation = HideDigitsVisualTransformation,
-            modifier = Modifier.padding(8.dp).fillMaxWidth()
+            modifier = Modifier
+                .padding(8.dp)
+                .fillMaxWidth()
         )
     }
 }
